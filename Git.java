@@ -1,6 +1,7 @@
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -299,5 +300,15 @@ public class Git {
             collapsedList.add("tree " + treeHash + " " + deepestDirectory);
             workingList = collapsedList;
         }
+    }
+
+    public static void saveCommit() throws IOException {
+        String hash = createTreeFromIndex();
+        File commitFile = new File("git/objects/" + hash);
+        commitFile.createNewFile();
+        PrintWriter pw = new PrintWriter(commitFile);
+        pw.write("tree: " + hash);
+        
+
     }
 }
