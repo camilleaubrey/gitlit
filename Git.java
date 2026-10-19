@@ -6,7 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
+import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.ArrayList;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
@@ -302,13 +304,37 @@ public class Git {
         }
     }
 
-    public static void saveCommit() throws IOException {
+    public static void saveCommit(String author, String message) throws IOException {
         String hash = createTreeFromIndex();
         File commitFile = new File("git/objects/" + hash);
         commitFile.createNewFile();
         PrintWriter pw = new PrintWriter(commitFile);
         pw.write("tree: " + hash);
-        
+        String head = Files.readString(Path.of("git/HEAD"));
+        if (!head.isEmpty()) {
+            FileWriter fw = new FileWriter("git/HEAD");
+            fw.write(hash);
+            fw.close();
+            pw.write("parent: " + head);
+        }
+        pw.write("author: " + author);
+        pw.write("date: " + LocalDateTime.now());
+        pw.write("message: " + message);
+        pw.close();
+    }
 
+    public static void regenIndex(String treeHash) throws IOException {
+        FileWriter fw = new FileWriter("git/index.temp");
+        List<String> objects = Files.readAllLines(Path.of("git/objects/" + treeHash));
+        for (String line : objects) {
+            String[] parts = line.split(" ");
+            if (parts[0].equals("blob")) {
+                String newIndex = (parts[1] + " " + parts[2]);
+                fw.write(newIndex);
+                fw.close();
+            } else if (parts[0].equals("tree")) {
+                regenIndex(parts[1]);
+            }
+        }
     }
 }
