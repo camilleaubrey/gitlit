@@ -1,11 +1,16 @@
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
+import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.ArrayList;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
@@ -298,6 +303,59 @@ public class Git {
             // add the tree
             collapsedList.add("tree " + treeHash + " " + deepestDirectory);
             workingList = collapsedList;
+        }
+    }
+
+    public static String saveCommit(String author, String message) throws IOException {
+        String hash = createTreeFromIndex();
+        File tempCommit = File.createTempFile("commit", ".tmp");
+        PrintWriter pw = new PrintWriter(tempCommit);
+        pw.write("tree: " + hash + "\n");
+        String head = Files.readString(Path.of("git/HEAD"));
+        if (!head.isEmpty()) {
+            pw.write("parent: " + head + "\n");
+        }
+        pw.write("author: " + author + "\n");
+        pw.write("date: " + LocalDateTime.now() + "\n");
+        pw.write("message: " + message);
+        pw.close();
+
+        //copied from hashFile above
+        byte[] fileBytes = Files.readAllBytes(tempCommit.toPath());
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-1");
+        } catch (Exception e) {
+            throw new RuntimeException("Something's not working in MessageDigest.");
+        }
+        // digest.update(fileBytes);
+        byte[] encodedHash = digest.digest(fileBytes);
+        String hashString = HexFormat.of().formatHex(encodedHash);
+
+        File commitFile = new File("git/objects/" + hashString);
+        commitFile.createNewFile();
+        Files.copy(tempCommit.toPath(), commitFile.toPath());
+        Files.writeString(Path.of("git/HEAD"), hashString);
+        tempCommit.delete();
+        return hashString;
+    }
+
+    public static void regenIndex(String treeHash, File tempIndex, String parent) throws IOException {
+        List<String> objects = Files.readAllLines(Path.of("git/objects/" + treeHash));
+        for (String line : objects) {
+            String[] parts = line.split(" ");
+            String path = "";
+            if (parent == "") {
+                path = parts[2];
+            } else {
+                path = parent + "/" + parts[2];
+            }
+            if (parts[0].equals("blob")) {
+                String newIndex = (parts[1] + " " + path);
+                Files.writeString(tempIndex.toPath(), newIndex + "\n", StandardOpenOption.APPEND);
+            } else if (parts[0].equals("tree")) {
+                regenIndex(parts[1], tempIndex, path);
+            }
         }
     }
 }
